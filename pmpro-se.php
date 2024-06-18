@@ -23,15 +23,12 @@ function retrieve_se_levels() {
     $options = get_option('pmpro_se_settings');
     $group_id = isset($options['group_id']) ? intval($options['group_id']) : null;
 
-    if (!function_exists('pmpro_get_level_ids_for_group')) {
+    if (!function_exists('pmpro_get_level_ids_for_group') || !$group_id) {
         return;
     }
 
-    // Only proceed if group_id is set
-    if ($group_id) {
-        // Retrieve level IDs for the SpacesEngine group
-        $spacesengine_levels = pmpro_get_level_ids_for_group($group_id);
-    }
+    // Retrieve level IDs for the SpacesEngine group
+    $spacesengine_levels = pmpro_get_level_ids_for_group($group_id);
 }
 add_action('init', 'retrieve_se_levels', 1);
 
@@ -390,38 +387,55 @@ function update_wpe_wps_filters_for_membership_level($level_id) {
 
     // Save the disabled filters for the membership level
     update_option('wpe_wps_disabled_filters_level_' . $level_id, $disabled_filters);
+    error_log('Disabled filters for level ' . $level_id . ': ' . print_r($disabled_filters, true)); // Log the disabled filters for the level
 }
 
 // Function to disable filters based on the space author's membership level
-function se_filters_for_individual_spaces() {
-    global $post;
-
+function se_filters_for_individual_spaces($result, $space) {
     // Check if the post type is `wpe_wpspace`
-    if (get_post_type() !== 'wpe_wpspace') {
-        return;
+    if (!isset($space->post_type) || $space->post_type !== 'wpe_wpspace') {
+        return $result;
     }
 
-    // Get the author ID and membership level
-    $author_id = $post->post_author;
-    $author_membership_level = pmpro_getMembershipLevelForUser($author_id);
+    // Get the author ID and membership levels
+    $author_id = $space->post_author;
+    $author_membership_levels = pmpro_getMembershipLevelsForUser($author_id);
 
-    if (!$author_membership_level) {
-        return;
+    error_log('Author ID: ' . $author_id);
+    error_log('Author Membership Levels: ' . print_r($author_membership_levels, true));
+
+    if (!$author_membership_levels) {
+        return $result;
     }
 
-    $membership_level_id = $author_membership_level->ID;
+    // Initialize an array to store all disabled filters
+    $all_disabled_filters = array();
 
-    // Get the disabled filters for the membership level
-    $disabled_filters = get_option('wpe_wps_disabled_filters_level_' . $membership_level_id, array());
+    // Iterate over each membership level and get the disabled filters
+    foreach ($author_membership_levels as $level) {
+        $membership_level_id = $level->ID;
+        $disabled_filters = get_option('wpe_wps_disabled_filters_level_' . $membership_level_id, array());
 
-    if (empty($disabled_filters) || !is_array($disabled_filters)) {
-        return;
+        error_log('Disabled Filters for level ' . $membership_level_id . ': ' . print_r($disabled_filters, true));
+
+        if (is_array($disabled_filters)) {
+            $all_disabled_filters = array_merge($all_disabled_filters, $disabled_filters);
+        }
+    }
+
+    error_log('All Disabled Filters: ' . print_r($all_disabled_filters, true));
+
+    if (empty($all_disabled_filters)) {
+        return $result;
     }
 
     // Disable each filter by adding a callback that does nothing
-    foreach ($disabled_filters as $filter_hook) {
+    foreach ($all_disabled_filters as $filter_hook) {
+        error_log('Disabling filter: ' . $filter_hook);
         add_filter($filter_hook, 'disable_filter_callback', 10, 2);
     }
+
+    return $result;
 }
 
 // Callback function to disable the filter
@@ -429,7 +443,12 @@ function disable_filter_callback($value) {
     return false;
 }
 
-// Hook the function to an appropriate action, such as 'the_post' to ensure it runs early
-add_action('the_post', 'se_filters_for_individual_spaces');
+// Apply the filters for individual spaces based on membership level
+$options = get_option('pmpro_se_settings');
+foreach ($options_and_filters as $option_name => $filter_hook) {
+    if (isset($options[$option_name]) && $options[$option_name] === 'disable') {
+        add_filter($filter_hook, 'se_filters_for_individual_spaces', 10, 2);
+    }
+}
 
 ?>
