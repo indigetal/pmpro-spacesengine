@@ -3,7 +3,7 @@
 Plugin Name: Paid Memberships Pro - SpacesEngine Integration
 Plugin URI: 
 Description: Integration to monetize SpacesEngine using Paid Memberships Pro.
-Version: 0.3.01
+Version: 0.3.02
 Author: Brandon Meyer
 Author URI: indigetal.com
 */
@@ -21,11 +21,14 @@ function retrieve_se_levels() {
     global $spacesengine_levels;
 
     $options = get_option('pmpro_se_settings');
-    $group_id = isset($options['group_id']) ? intval($options['group_id']) : 4; // Default to 4 if not set
+    $group_id = isset($options['group_id']) ? intval($options['group_id']) : null;
 
     if (!function_exists('pmpro_get_level_ids_for_group')) {
-        error_log('pmpro_get_level_ids_for_group() function does not exist'); 
-    } else {
+        return;
+    }
+
+    // Only proceed if group_id is set
+    if ($group_id) {
         // Retrieve level IDs for the SpacesEngine group
         $spacesengine_levels = pmpro_get_level_ids_for_group($group_id);
     }
@@ -45,45 +48,48 @@ function se_member_redirects() {
     global $spacesengine_levels;
 
     $options = get_option('pmpro_se_settings');
-    $non_admin_user_id = isset($options['non_admin_user_id']) ? intval($options['non_admin_user_id']) : 65;
-    $create_space_page = isset($options['create_space_page']) ? $options['create_space_page'] : '/create-organization';
-    $redirect_url = isset($options['redirect_url']) ? $options['redirect_url'] : '/membership/organization-plans/';
+    $non_admin_user_id = isset($options['non_admin_user_id']) ? intval($options['non_admin_user_id']) : null;
+    $create_space_page = isset($options['create_space_page']) ? $options['create_space_page'] : null;
+    $redirect_url = isset($options['redirect_url']) ? $options['redirect_url']) : null;
 
     // Check if PMPro is active
     if (!function_exists('pmpro_hasMembershipLevel')) {
         return;
     }
 
-    if (strpos($_SERVER['REQUEST_URI'], $create_space_page) !== false) {
+    // Only proceed if $create_space_page and $redirect_url are set
+    if ($create_space_page && $redirect_url && strpos($_SERVER['REQUEST_URI'], '/' . trim($create_space_page, '/') . '/') !== false) {
         // Allow administrators to access restricted pages
         if (current_user_can('administrator')) {
             return;
         }
 
         // Allow specific non-admin user to access the create-organization page
-        if (get_current_user_id() == $non_admin_user_id) {
+        if ($non_admin_user_id && get_current_user_id() == $non_admin_user_id) {
             return;
         }
 
         // If a visitor trying to create a new Space doesn't have a SpacesEngine membership...
         if (!pmpro_hasMembershipLevel($spacesengine_levels)) {
+            // Correct the redirect URL to ensure it is absolute
+            $redirect_url = home_url($redirect_url);
             // Redirect them to the SpacesEngine plans page
             wp_safe_redirect($redirect_url);
             exit;
         }
     }
 }
-add_action('template_redirect', 'se_member_redirects');
+add_action('template_redirect', 'se_member_redirects', 10); // Ensure this runs before the Snippet Manager redirects
 
 // Adjust the cost of a SpacesEngine-based level at checkout
 function pmpro_adjustable_level_cost($level) {
     global $spacesengine_levels;
     $options = get_option('pmpro_se_settings');
 
-    $promoted_monthly = isset($options['promoted_monthly']) ? floatval($options['promoted_monthly']) : 10;
-    $promoted_annual = isset($options['promoted_annual']) ? floatval($options['promoted_annual']) : 100;
-    $featured_monthly = isset($options['featured_monthly']) ? floatval($options['featured_monthly']) : 15;
-    $featured_annual = isset($options['featured_annual']) ? floatval($options['featured_annual']) : 120;
+    $promoted_monthly = isset($options['promoted_monthly']) ? floatval($options['promoted_monthly']) : null;
+    $promoted_annual = isset($options['promoted_annual']) ? floatval($options['promoted_annual']) : null;
+    $featured_monthly = isset($options['featured_monthly']) ? floatval($options['featured_monthly']) : null;
+    $featured_annual = isset($options['featured_annual']) ? floatval($options['featured_annual']) : null;
 
     // Return the unmodified level if not in SpacesEngine group
     if (isset($level->id) && !in_array($level->id, $spacesengine_levels)) {
@@ -113,10 +119,10 @@ function pmpro_adjustable_level_cost($level) {
             }
             // Check if there is an extra fee
             if ($extra_fee > 0) {
-                 // Add the additional fee to the level's initial payment
+                // Add the additional fee to the level's initial payment
                 $level->initial_payment += $extra_fee;
                 
-                 // Check if the level has a recurring subscription
+                // Check if the level has a recurring subscription
                 if (pmpro_isLevelRecurring($level)) {
                     // Configure recurring payments
                     $level->billing_amount += $extra_fee;
@@ -171,7 +177,6 @@ function display_membership_adjusted_price($levels, $user_id) {
 
     // Check if spacesengine_levels is set and is an array
     if (!isset($spacesengine_levels) || !is_array($spacesengine_levels)) {
-        error_log('SpacesEngine levels are not set or not an array');
         return $levels;
     }
 
@@ -217,7 +222,59 @@ function pmpro_space_level_removed_actions($level_id, $user_id) {
         update_user_upgrade_listing($user_id, 'none');
     }
 }
+
+function update_user_posts_to_draft($user_id) {
+    // Get the user's posts
+    $args = array('author' => $user_id, 'post_type' => 'wpe_wpspace');
+    $user_posts = get_posts($args);
+    foreach ($user_posts as $user_post) {
+        wp_update_post(array('ID' => $user_post->ID, 'post_status' => 'draft'));
+    }
+}
+
+// Update upgrade_listing user meta
+function update_user_upgrade_listing($user_id, $value) {
+    update_user_meta($user_id, 'upgrade_listing', $value);
+}
 add_action('pmpro_after_change_membership_level', 'pmpro_space_level_removed_actions', 10, 2);
+
+// Define the global options_and_filters array if not already defined
+global $options_and_filters;
+if (!isset($options_and_filters) || !is_array($options_and_filters)) {
+    $options_and_filters = array(
+        'enable_space_creation' => 'wpe_wps_is_space_creation_enabled',
+        'space_creation_limit' => 'wpe_wps_get_space_creation_limit',
+        'verify_spaces' => 'wpe_wps_is_verification_enabled',
+        //'feature_spaces' => 'wpe_wps_is_featured_enabled',
+        //'promote_spaces' => 'wpe_wps_is_promoted_enabled',
+        'enable_space_admins' => 'wpe_wps_get_admins_enabled',
+        'enable_space_editors' => 'wpe_wps_get_editors_enabled',
+        'enable_profile_picture' => 'wpe_wps_can_profile_picture_upload',
+        'enable_cover_image' => 'wpe_wps_can_cover_image_upload',
+        'enable_short_description' => 'wpe_wps_is_short_description_enabled',
+        'display_long_description' => 'wpe_wps_can_display_long_description',
+        'display_website' => 'wpe_wps_can_display_website',
+        'display_email' => 'wpe_wps_can_display_email',
+        'display_address' => 'wpe_wps_can_display_address',
+        'display_phone_number' => 'wpe_wps_can_display_phone',
+        'enable_work_hours' => 'wpe_wps_is_work_hours_enabled',
+        'display_social_icons' => 'wpe_wps_can_display_social_icons',
+        'enable_categories' => 'wpe_wps_is_categories_enabled',
+        'enable_messaging' => 'wpe_wps_is_messaging_enabled',
+        'enable_engagement' => 'wpe_wps_is_engagement_enabled',
+        'enable_contact_form' => 'wpe_wps_is_contact_form_enabled',
+        'display_whatsapp_number' => 'wpe_wps_can_display_whatsapp',
+        'enable_activity_feed' => 'wpe_wps_is_activity_feed_enabled',
+        'enable_action_buttons' => 'wpe_wps_is_action_buttons_enabled',
+        'enable_linked_groups' => 'wpe_wps_is_groups_enabled',
+        'enable_services' => 'wpe_wps_is_services_enabled',
+        'enable_header_video' => 'wpe_wps_is_video_enabled',
+        'enable_reviews' => 'wpe_wps_is_reviews_enabled',
+        'enable_jobs' => 'wpe_wps_is_jobs_enabled',
+        'enable_events' => 'wpe_wps_is_events_enabled',
+        'display_custom_fields' => 'wpe_wps_can_display_custom_fields'
+    );
+}
 
 /* Configure default listing for pre-populating directory (must use non-admin user) 
 It's recommended that you create an account with a username like "unverified," hide it from the BB members directory using a profile type, and create a redirect on the user profile to point to a "Claim a Space" 
@@ -230,9 +287,15 @@ function filters_for_specific_user($result, $space) {
         $post_author = $wpdb->get_var($wpdb->prepare("SELECT post_author FROM $wpdb->posts WHERE ID = %d", $space->ID));
         // Check if the author's user ID matches the non-admin user ID from settings
         $options = get_option('pmpro_se_settings');
-        $non_admin_user_id = isset($options['non_admin_user_id']) ? intval($options['non_admin_user_id']) : 65;
-        if ($non_admin_user_id === (int) $post_author) {
-            // Disable the filter
+        $non_admin_user_id = isset($options['non_admin_user_id']) ? intval($options['non_admin_user_id']) : null;
+        if ($non_admin_user_id && $non_admin_user_id === (int) $post_author) {
+            // Apply the filters based on settings
+            global $options_and_filters;
+            foreach ($options_and_filters as $option_name => $filter_hook) {
+                if (isset($options[$option_name]) && $options[$option_name] === 'disable') {
+                    add_filter($filter_hook, '__return_false', 10, 2);
+                }
+            }
             return false;
         }
     }
@@ -240,67 +303,14 @@ function filters_for_specific_user($result, $space) {
     return $result;
 }
 
-// Define the filters to disable
-$default_filters = array(
-    'wpe_wps_is_activity_feed_enabled',
-    'wpe_wps_is_verification_enabled',
-    'wpe_wps_get_admins_enabled',
-    'wpe_wps_get_editors_enabled',
-    'wpe_wps_can_display_phone',
-    'wpe_wps_is_work_hours_enabled',
-    'wpe_wps_is_messaging_enabled',
-    'wpe_wps_is_contact_form_enabled',
-    'wpe_wps_can_display_whatsapp',
-    'wpe_wps_is_action_buttons_enabled',
-    'wpe_wps_is_groups_enabled',
-    'wpe_wps_is_services_enabled',
-    'wpe_wps_is_video_enabled',
-    'wpe_wps_is_jobs_enabled',
-    'wpe_wps_is_events_enabled',
-    'wpe_wps_can_display_custom_fields'
-);
-
-// Apply the same callback function to all the filters
-foreach ($default_filters as $filter) {
-    add_filter($filter, 'filters_for_specific_user', 10, 2);
-}
-
+// Apply the same callback function to all the filters defined in options_and_filters
 global $options_and_filters;
-
-// Define an array of options and corresponding filter hooks
-$options_and_filters = array(
-    'enable_space_creation' => 'wpe_wps_is_space_creation_enabled',
-    'space_creation_limit' => 'wpe_wps_get_space_creation_limit',
-    'verify_spaces' => 'wpe_wps_is_verification_enabled',
-    //'feature_spaces' => 'wpe_wps_is_featured_enabled',
-    //'promote_spaces' => 'wpe_wps_is_promoted_enabled',
-    'enable_space_admins' => 'wpe_wps_get_admins_enabled',
-    'enable_space_editors' => 'wpe_wps_get_editors_enabled',
-    'enable_profile_picture' => 'wpe_wps_can_profile_picture_upload',
-    'enable_cover_image' => 'wpe_wps_can_cover_image_upload',
-    'enable_short_description' => 'wpe_wps_is_short_description_enabled',
-    'display_long_description' => 'wpe_wps_can_display_long_description',
-    'display_website' => 'wpe_wps_can_display_website',
-    'display_email' => 'wpe_wps_can_display_email',
-    'display_address' => 'wpe_wps_can_display_address',
-    'display_phone_number' => 'wpe_wps_can_display_phone',
-    'enable_work_hours' => 'wpe_wps_is_work_hours_enabled',
-    'display_social_icons' => 'wpe_wps_can_display_social_icons',
-    'enable_categories' => 'wpe_wps_is_categories_enabled',
-    'enable_messaging' => 'wpe_wps_is_messaging_enabled',
-    'enable_engagement' => 'wpe_wps_is_engagement_enabled',
-    'enable_contact_form' => 'wpe_wps_is_contact_form_enabled',
-    'display_whatsapp_number' => 'wpe_wps_can_display_whatsapp',
-    'enable_activity_feed' => 'wpe_wps_is_activity_feed_enabled',
-    'enable_action_buttons' => 'wpe_wps_is_action_buttons_enabled',
-    'enable_linked_groups' => 'wpe_wps_is_groups_enabled',
-    'enable_services' => 'wpe_wps_is_services_enabled',
-    'enable_header_video' => 'wpe_wps_is_video_enabled',
-    'enable_reviews' => 'wpe_wps_is_reviews_enabled',
-    'enable_jobs' => 'wpe_wps_is_jobs_enabled',
-    'enable_events' => 'wpe_wps_is_events_enabled',
-    'display_custom_fields' => 'wpe_wps_can_display_custom_fields'
-);
+$options = get_option('pmpro_se_settings');
+foreach ($options_and_filters as $option_name => $filter_hook) {
+    if (isset($options[$option_name]) && $options[$option_name] === 'disable') {
+        add_filter($filter_hook, 'filters_for_specific_user', 10, 2);
+    }
+}
 
 // Add SpacesEngine filters to PMPro level settings page:
 add_action('pmpro_membership_level_after_other_settings', 'enable_disable_se_features', 1, 2);

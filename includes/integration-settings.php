@@ -1,14 +1,13 @@
 <?php
-// Add the settings page to the Paid Memberships Pro menu
+// Add the settings page to the Memberships menu under PMPro
 function pmpro_se_add_settings_page() {
-    // Add to Paid Memberships Pro menu
     add_submenu_page(
-        'pmpro-membershiplevels',
-        'SpacesEngine Addon',
-        'SpacesEngine Addon',
-        'manage_options',
-        'pmpro-se-integration',
-        'pmpro_se_settings_page_callback'
+        'pmpro-dashboard', // Parent menu slug
+        'SpacesEngine Addon', // Page title
+        'SpacesEngine Addon', // Menu title
+        'manage_options', // Capability
+        'pmpro-se-integration', // Menu slug
+        'pmpro_se_settings_page_callback' // Callback function
     );
 }
 add_action('admin_menu', 'pmpro_se_add_settings_page');
@@ -17,7 +16,7 @@ add_action('admin_menu', 'pmpro_se_add_settings_page');
 function pmpro_se_settings_page_callback() {
     ?>
     <div class="wrap">
-        <h1><?php esc_html_e('SpacesEngine Addon Settings', 'textdomain'); ?></h1>
+        <h1><?php esc_html_e('SpacesEngine Integration Settings', 'textdomain'); ?></h1>
         <form method="post" action="options.php">
             <?php
             settings_fields('pmpro_se_settings_group');
@@ -47,15 +46,6 @@ function pmpro_se_register_settings() {
         'pmpro-se-integration',
         'pmpro_se_main_section',
         array('label_for' => 'pmpro_se_group_id')
-    );
-
-    add_settings_field(
-        'pmpro_se_non_admin_user_id',
-        __('Non-Admin User ID', 'textdomain'),
-        'pmpro_se_non_admin_user_id_callback',
-        'pmpro-se-integration',
-        'pmpro_se_main_section',
-        array('label_for' => 'pmpro_se_non_admin_user_id')
     );
 
     add_settings_field(
@@ -118,6 +108,35 @@ function pmpro_se_register_settings() {
         'pmpro_se_upgrade_costs_section',
         array('label_for' => 'pmpro_se_featured_annual')
     );
+
+    add_settings_section(
+        'pmpro_se_default_features_section',
+        __('Default Listing', 'textdomain'),
+        'pmpro_se_default_features_section_callback',
+        'pmpro-se-integration'
+    );
+
+    add_settings_field(
+        'pmpro_se_non_admin_user_id',
+        __('Non-Admin User ID', 'textdomain'),
+        'pmpro_se_non_admin_user_id_callback',
+        'pmpro-se-integration',
+        'pmpro_se_default_features_section',
+        array('label_for' => 'pmpro_se_non_admin_user_id')
+    );
+
+    global $options_and_filters;
+
+    foreach ($options_and_filters as $option_name => $filter_hook) {
+        add_settings_field(
+            $option_name,
+            __(ucwords(str_replace('_', ' ', $option_name)), 'textdomain'),
+            'pmpro_se_default_feature_callback',
+            'pmpro-se-integration',
+            'pmpro_se_default_features_section',
+            array('label_for' => $option_name)
+        );
+    }
 }
 add_action('admin_init', 'pmpro_se_register_settings');
 
@@ -128,16 +147,8 @@ function pmpro_se_section_callback() {
 function pmpro_se_group_id_callback() {
     $options = get_option('pmpro_se_settings');
     ?>
-    <input type="text" name="pmpro_se_settings[group_id]" id="pmpro_se_group_id" value="<?php echo isset($options['group_id']) ? esc_attr($options['group_id']) : ''; ?>">
+    <input type="text" name="pmpro_se_settings[group_id]" id="se_pmpro_group_id" value="<?php echo isset($options['group_id']) ? esc_attr($options['group_id']) : ''; ?>">
     <p class="description"><?php _e('The Group ID of the SpacesEngine Levels', 'textdomain'); ?></p>
-    <?php
-}
-
-function pmpro_se_non_admin_user_id_callback() {
-    $options = get_option('pmpro_se_settings');
-    ?>
-    <input type="text" name="pmpro_se_settings[non_admin_user_id]" id="pmpro_se_non_admin_user_id" value="<?php echo isset($options['non_admin_user_id']) ? esc_attr($options['non_admin_user_id']) : ''; ?>">
-    <p class="description"><?php _e('Allow user with ID to pre-populate directory with default Spaces (must be a non-admin user for the filters to apply).', 'textdomain'); ?></p>
     <?php
 }
 
@@ -190,6 +201,30 @@ function pmpro_se_featured_annual_callback() {
     ?>
     <input type="number" name="pmpro_se_settings[featured_annual]" id="pmpro_se_featured_annual" value="<?php echo isset($options['featured_annual']) ? esc_attr($options['featured_annual']) : ''; ?>">
     <p class="description"><?php _e('The annual cost for featured upgrades.', 'textdomain'); ?></p>
+    <?php
+}
+
+function pmpro_se_default_features_section_callback() {
+    echo '<p>' . __('Configure default listing features, great for pre-populating the directory with basic Spaces without requiring a plan or product purchase. You must assign a non-admin user for the filters to apply to the listings. It is recommended that you create a dedicated account with a username like "unverified-listing," hide it from the BB members directory using a profile type, and create a redirect on the user profile to point to a "Claim a Space" page with instructions as an extra precaution.', 'textdomain') . '</p>';
+}
+
+function pmpro_se_non_admin_user_id_callback() {
+    $options = get_option('pmpro_se_settings');
+    ?>
+    <input type="text" name="pmpro_se_settings[non_admin_user_id]" id="pmpro_se_non_admin_user_id" value="<?php echo isset($options['non_admin_user_id']) ? esc_attr($options['non_admin_user_id']) : ''; ?>">
+    <p class="description"><?php _e('The user ID of the account to be used for pre-populating the directory (must be a non-admin user for the filters to apply).', 'textdomain'); ?></p>
+    <?php
+}
+
+function pmpro_se_default_feature_callback($args) {
+    $options = get_option('pmpro_se_settings');
+    $option_name = $args['label_for'];
+    $value = isset($options[$option_name]) ? $options[$option_name] : 'enable';
+    ?>
+    <select name="pmpro_se_settings[<?php echo esc_attr($option_name); ?>]" id="<?php echo esc_attr($option_name); ?>">
+        <option value="enable" <?php selected($value, 'enable'); ?>><?php _e('Enable', 'textdomain'); ?></option>
+        <option value="disable" <?php selected($value, 'disable'); ?>><?php _e('Disable', 'textdomain'); ?></option>
+    </select>
     <?php
 }
 ?>
