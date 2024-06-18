@@ -50,7 +50,7 @@ function se_member_redirects() {
     $options = get_option('pmpro_se_settings');
     $non_admin_user_id = isset($options['non_admin_user_id']) ? intval($options['non_admin_user_id']) : null;
     $create_space_page = isset($options['create_space_page']) ? $options['create_space_page'] : null;
-    $redirect_url = isset($options['redirect_url']) ? $options['redirect_url']) : null;
+    $redirect_url = isset($options['redirect_url']) ? $options['redirect_url'] : null;
 
     // Check if PMPro is active
     if (!function_exists('pmpro_hasMembershipLevel')) {
