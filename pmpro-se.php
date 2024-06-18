@@ -3,7 +3,7 @@
 Plugin Name: Paid Memberships Pro - SpacesEngine Integration
 Plugin URI: 
 Description: Integration to monetize SpacesEngine using Paid Memberships Pro.
-Version: 0.3.02
+Version: 0.3.03
 Author: Brandon Meyer
 Author URI: indigetal.com
 */
@@ -326,12 +326,12 @@ function enable_disable_se_features($level) {
             <tbody>
                 <?php foreach ($options_and_filters as $option_name => $filter_hook) : ?>
                     <tr>
-                        <th scope="row"><?php echo esc_html($option_name); ?></th>
+                        <th scope="row"><?php echo esc_html(ucwords(str_replace('_', ' ', str_replace('enable_', '', $option_name)))); ?></th>
                         <td>
                             <?php
                             // Retrieve the option value for the current membership level
-                            $option_value = get_option('wpe_wps_' . $option_name . '_level_' . $id);
-                            
+                            $option_value = get_option('wpe_wps_' . $option_name . '_level_' . $id, 'enable');
+
                             // Render input based on option type
                             if ($option_name === 'space_creation_limit') {
                                 ?>
@@ -339,7 +339,10 @@ function enable_disable_se_features($level) {
                                 <?php
                             } else {
                                 ?>
-                                <input type="checkbox" name="<?php echo esc_attr($option_name); ?>" value="1" <?php checked($option_value, 1); ?> />
+                                <select name="<?php echo esc_attr($option_name); ?>" id="<?php echo esc_attr($option_name); ?>">
+                                    <option value="enable" <?php selected($option_value, 'enable'); ?>><?php _e('Enable', 'textdomain'); ?></option>
+                                    <option value="disable" <?php selected($option_value, 'disable'); ?>><?php _e('Disable', 'textdomain'); ?></option>
+                                </select>
                                 <?php
                             }
                             ?>
@@ -374,10 +377,10 @@ function update_wpe_wps_filters_for_membership_level($level_id) {
 
     // Iterate over each option and filter
     foreach ($options_and_filters as $option_name => $filter_hook) {
-        $value = isset($_REQUEST[$option_name]) ? true : false;
+        $value = isset($_REQUEST[$option_name]) ? $_REQUEST[$option_name] : 'enable';
 
-        // If the value is false, it means the filter is disabled
-        if (!$value) {
+        // If the value is 'disable', it means the filter is disabled
+        if ($value === 'disable') {
             $disabled_filters[] = $filter_hook;
         }
 
@@ -399,20 +402,18 @@ function se_filters_for_individual_spaces($result, $space) {
 
     // Get the author ID and membership levels
     $author_id = $space->post_author;
-    $author_membership_levels = pmpro_getMembershipLevelsForUser($author_id);
+    $membership_levels = pmpro_getMembershipLevelsForUser($author_id);
 
-    error_log('Author ID: ' . $author_id);
-    error_log('Author Membership Levels: ' . print_r($author_membership_levels, true));
-
-    if (!$author_membership_levels) {
+    if (!$membership_levels) {
         return $result;
     }
 
-    // Initialize an array to store all disabled filters
+    error_log('Author ID: ' . $author_id);
+    error_log('Author Membership Levels: ' . print_r($membership_levels, true));
+
     $all_disabled_filters = array();
 
-    // Iterate over each membership level and get the disabled filters
-    foreach ($author_membership_levels as $level) {
+    foreach ($membership_levels as $level) {
         $membership_level_id = $level->ID;
         $disabled_filters = get_option('wpe_wps_disabled_filters_level_' . $membership_level_id, array());
 
@@ -432,7 +433,7 @@ function se_filters_for_individual_spaces($result, $space) {
     // Disable each filter by adding a callback that does nothing
     foreach ($all_disabled_filters as $filter_hook) {
         error_log('Disabling filter: ' . $filter_hook);
-        add_filter($filter_hook, 'disable_filter_callback', 10, 2);
+        add_filter($filter_hook, 'disable_filter_callback', 20, 2); // Use a higher priority to ensure it overrides other filters
     }
 
     return $result;
