@@ -3,7 +3,7 @@
 Plugin Name: Paid Memberships Pro - SpacesEngine Integration
 Plugin URI: 
 Description: Integration to monetize SpacesEngine using Paid Memberships Pro.
-Version: 0.3.03
+Version: 0.3.04
 Author: Brandon Meyer
 Author URI: indigetal.com
 */

@@ -169,7 +169,7 @@ function pmpro_se_redirect_url_callback() {
 }
 
 function pmpro_se_upgrade_costs_section_callback() {
-    echo '<p>' . __('Define the costs for promoted and featured upgrades.', 'textdomain') . '</p>';
+    echo '<p>' . __('Define the costs for promoted and featured upgrades. This requires that you create a custom user field in Memberships > Settings > User Fields named "upgrade_listing" with the options "none", "promoted", and "featured". Another housekeeping item to ensure you are displaying accurate information to your users: in Memberships > Settings > Email Templates, select the email template “Checkout - Paid,” and “Checkout - Paid (admin)” and remove the following line: <p>Membership Fee: !!membership_cost!!</p> That line displays the initial cost of the membership plan and not the updated membership plan with the options.', 'textdomain') . '</p>';
 }
 
 function pmpro_se_promoted_monthly_callback() {
@@ -220,11 +220,20 @@ function pmpro_se_default_feature_callback($args) {
     $options = get_option('pmpro_se_settings');
     $option_name = $args['label_for'];
     $value = isset($options[$option_name]) ? $options[$option_name] : 'enable';
-    ?>
-    <select name="pmpro_se_settings[<?php echo esc_attr($option_name); ?>]" id="<?php echo esc_attr($option_name); ?>">
-        <option value="enable" <?php selected($value, 'enable'); ?>><?php _e('Enable', 'textdomain'); ?></option>
-        <option value="disable" <?php selected($value, 'disable'); ?>><?php _e('Disable', 'textdomain'); ?></option>
-    </select>
-    <?php
+
+    // Render input based on option type
+    if ($option_name === 'space_creation_limit') {
+        ?>
+        <input type="number" name="pmpro_se_settings[<?php echo esc_attr($option_name); ?>]" id="<?php echo esc_attr($option_name); ?>" value="<?php echo esc_attr(absint($value)); ?>" />
+        <p class="description"><?php _e('Maximum number of spaces that can be created.', 'textdomain'); ?></p>
+        <?php
+    } else {
+        ?>
+        <select name="pmpro_se_settings[<?php echo esc_attr($option_name); ?>]" id="<?php echo esc_attr($option_name); ?>">
+            <option value="enable" <?php selected($value, 'enable'); ?>><?php _e('Enable', 'textdomain'); ?></option>
+            <option value="disable" <?php selected($value, 'disable'); ?>><?php _e('Disable', 'textdomain'); ?></option>
+        </select>
+        <?php
+    }
 }
 ?>
