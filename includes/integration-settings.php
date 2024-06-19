@@ -205,7 +205,7 @@ function pmpro_se_featured_annual_callback() {
 }
 
 function pmpro_se_default_features_section_callback() {
-    echo '<p>' . __('Configure default listing features, great for pre-populating the directory with basic Spaces without requiring a plan or product purchase. You must assign a non-admin user for the filters to apply to the listings. It is recommended that you create a dedicated account with a username like "unverified-listing," hide it from the BB members directory using a profile type, and create a redirect on the user profile to point to a "Claim a Space" page with instructions as an extra precaution.', 'textdomain') . '</p>';
+    echo '<p>' . __('Configure default listing features, great for pre-populating the directory with basic Spaces without requiring a plan or product purchase. You must assign a non-admin user for the filters to apply to the listings. It is recommended that you create a dedicated account with a username like "unverified", hide it from the BB members directory using a profile type, and create a redirect on the user profile to point to a "Claim a Space" page with instructions as an extra precaution.', 'textdomain') . '</p>';
 }
 
 function pmpro_se_non_admin_user_id_callback() {
