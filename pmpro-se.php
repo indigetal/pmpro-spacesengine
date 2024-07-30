@@ -3,7 +3,7 @@
 Plugin Name: Paid Memberships Pro - SpacesEngine Integration
 Plugin URI: 
 Description: Integration to monetize SpacesEngine using Paid Memberships Pro.
-Version: 0.3.04
+Version: 1.0
 Author: Brandon Meyer
 Author URI: indigetal.com
 */
@@ -340,8 +340,8 @@ function enable_disable_se_features($level) {
                             } else {
                                 ?>
                                 <select name="<?php echo esc_attr($option_name); ?>" id="<?php echo esc_attr($option_name); ?>">
-                                    <option value="enable" <?php selected($option_value, 'enable'); ?>><?php _e('Enable', 'textdomain'); ?></option>
-                                    <option value="disable" <?php selected($option_value, 'disable'); ?>><?php _e('Disable', 'textdomain'); ?></option>
+                                    <option value="enable" <?php selected($option_value, 'enable'); ?>><?php _e('Enable', 'paid-memberships-pro'); ?></option>
+                                    <option value="disable" <?php selected($option_value, 'disable'); ?>><?php _e('Disable', 'paid-memberships-pro'); ?></option>
                                 </select>
                                 <?php
                             }
